@@ -1,0 +1,77 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+model User {
+  id              String         @id @default(uuid())
+  // Secure/Anonymized Identifier
+  anonymousId     String         @unique @default(uuid())
+  
+  // Consent Management Flags (GDPR)
+  trackingOptIn   Boolean        @default(false)
+  locationOptIn   Boolean        @default(false)
+  aiOptIn         Boolean        @default(false)
+  
+  // PII Vault Reference (Foreign Key to an encrypted vault system)
+  piiVaultId      String?        @unique
+  
+  // Points & Balances
+  pointsBalance   Int            @default(0)
+  
+  // Relations
+  analyticsEvents AnalyticsEvent[]
+  redeemedOffers  RedeemedOffer[]
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  eventType   String   // e.g. "VIEWED_OFFER", "COMPARED_OFFERS", "SEARCHED"
+  eventData   Json?    // Optional JSON payload with non-PII attributes
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+}
+
+model Offer {
+  id             String         @id @default(uuid())
+  title          String
+  description    String
+  pointsRequired Int
+  monetaryValue  Float?         // Estimated fiat value for comparison
+  categories     String[]       // e.g. ["TRAVEL", "HOTEL"]
+  
+  // Geolocation for "near me" feature
+  latitude       Float?
+  longitude      Float?
+  location       Unsupported("geometry(Point, 4326)")?
+  
+  validUntil     DateTime?
+  
+  redeemedEvents RedeemedOffer[]
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model RedeemedOffer {
+  id        String   @id @default(uuid())
+  userId    String
+  offerId   String
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offer     Offer    @relation(fields: [offerId], references: [id])
+  
+  createdAt DateTime @default(now())
+}

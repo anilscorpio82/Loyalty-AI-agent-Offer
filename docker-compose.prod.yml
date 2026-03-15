@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: loyalty-db-prod
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: loyaltydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d loyaltydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: loyalty-redis-prod
+    ports:
+      - "6379:6379"
+
+  ml-service:
+    build: 
+      context: ./ml-service
+    container_name: loyalty-ml-prod
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/loyaltydb
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    container_name: loyalty-backend-prod
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/loyaltydb
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: loyalty-frontend-prod
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
